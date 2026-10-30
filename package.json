@@ -1,0 +1,27 @@
+{
+  "name": "tourest-ai-lead-hunter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tourest AI Lead Hunter - local-first, privacy-conscious B2C lead discovery for Tourest tours & activities.",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=18.20.8 <19 || >=20"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,magenta \"npm run dev -w @tourest/api\" \"npm run dev -w @tourest/web\"",
+    "build": "npm run build -w @tourest/shared && npm run build -w @tourest/api && npm run build -w @tourest/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "db:generate": "npm run db:generate -w @tourest/api",
+    "db:migrate": "npm run db:migrate -w @tourest/api"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "typescript": "^5.5.4",
+    "vitest": "^2.1.9"
+  }
+}
