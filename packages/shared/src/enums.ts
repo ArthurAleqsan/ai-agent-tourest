@@ -13,6 +13,9 @@ export const SOURCE_TYPES = [
   "authorized_inbox", // messages a user explicitly authorised us to read
   "manual_entry", // a human typed/pasted the item
   "referral", // referred by an existing contact/partner
+  "telegram", // authorized Telegram group messages (Bot API)
+  "facebook", // manually imported public FB discussion content
+  "yandex_wordstat", // Yandex Wordstat keyword demand (aggregate, CSV import)
 ] as const;
 export type SourceType = (typeof SOURCE_TYPES)[number];
 
@@ -45,6 +48,34 @@ export const LEAD_LIFECYCLE_STATUSES = [
 ] as const;
 export type LeadLifecycleStatus = (typeof LEAD_LIFECYCLE_STATUSES)[number];
 
+/**
+ * Step 5 sales-pipeline status for a Lead, as shown on the dashboard.
+ * This is the operator-facing pipeline (distinct from the lower-level
+ * {@link LEAD_LIFECYCLE_STATUSES} used by the internal state machine).
+ */
+export const LEAD_PIPELINE_STATUSES = [
+  "discovered",
+  "qualified",
+  "draft_ready",
+  "approved",
+  "contacted",
+  "replied",
+  "converted",
+  "rejected",
+] as const;
+export type LeadPipelineStatus = (typeof LEAD_PIPELINE_STATUSES)[number];
+
+/** Configurable background job identifiers (Step 5 orchestration). */
+export const JOB_NAMES = [
+  "source-ingestion",
+  "deduplication",
+  "ai-qualification",
+  "tour-matching",
+  "draft-generation",
+  "follow-up-reminders",
+] as const;
+export type JobName = (typeof JOB_NAMES)[number];
+
 /** Human-in-the-loop approval status, used by Leads and MessageDrafts. */
 export const HUMAN_APPROVAL_STATUSES = [
   "pending", // awaiting human review
@@ -62,6 +93,41 @@ export const INTENT_LEVELS = [
   "high",
 ] as const;
 export type IntentLevel = (typeof INTENT_LEVELS)[number];
+
+/**
+ * Qualification intent buckets (Step 2 AI qualification output).
+ * Derived deterministically from the 0-100 intent score.
+ */
+export const QUALIFICATION_INTENT_LEVELS = [
+  "hot",
+  "warm",
+  "cold",
+  "irrelevant",
+] as const;
+export type QualificationIntentLevel =
+  (typeof QUALIFICATION_INTENT_LEVELS)[number];
+
+/** How explicitly a purchase/booking intent is expressed. */
+export const PURCHASE_INTENT_LEVELS = [
+  "explicit", // clearly wants to book / asks for prices / recommendations
+  "implicit", // interested / planning, but no direct buying signal
+  "none", // no purchase intent
+] as const;
+export type PurchaseIntentLevel = (typeof PURCHASE_INTENT_LEVELS)[number];
+
+/** How time-sensitive the request appears. */
+export const URGENCY_LEVELS = ["high", "medium", "low", "none"] as const;
+export type UrgencyLevel = (typeof URGENCY_LEVELS)[number];
+
+/** Suggested next action produced by qualification (advisory only). */
+export const SUGGESTED_NEXT_ACTIONS = [
+  "prioritize_outreach", // hot: queue for human-approved outreach
+  "request_more_info", // promising but missing key info
+  "nurture", // warm: keep engaged
+  "monitor", // cold: watch for stronger signals
+  "discard", // irrelevant
+] as const;
+export type SuggestedNextAction = (typeof SUGGESTED_NEXT_ACTIONS)[number];
 
 /** Consent/permission to actually contact a lead. */
 export const CONTACT_PERMISSION_STATUSES = [
@@ -114,3 +180,29 @@ export const MARKET_REGIONS = [
   "other",
 ] as const;
 export type MarketRegion = (typeof MARKET_REGIONS)[number];
+
+/** Activity categories used for tour matching & SEO categorization. */
+export const ACTIVITY_CATEGORIES = [
+  "diving",
+  "snorkeling",
+  "desert_safari",
+  "boat_trip",
+  "city_tour",
+  "sightseeing",
+  "water_park",
+  "dolphin_show",
+  "quad_biking",
+  "fishing",
+  "cultural",
+  "other",
+] as const;
+export type ActivityCategory = (typeof ACTIVITY_CATEGORIES)[number];
+
+/** Commercial-intent buckets for aggregate SEO demand signals. */
+export const COMMERCIAL_INTENT_LEVELS = [
+  "transactional", // clear buying intent (price, book, buy)
+  "commercial", // comparing / strong purchase consideration
+  "informational", // researching, weak purchase intent
+  "navigational", // looking for a specific brand/site
+] as const;
+export type CommercialIntentLevel = (typeof COMMERCIAL_INTENT_LEVELS)[number];

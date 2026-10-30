@@ -9,7 +9,6 @@ function bootstrap(): void {
   const container = createContainer();
   const app = createServer(container);
 
-  // Start the (currently empty) background job scheduler.
   container.jobScheduler.start();
 
   const server = app.listen(env.PORT, () => {

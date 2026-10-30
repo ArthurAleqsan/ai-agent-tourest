@@ -11,15 +11,22 @@ import {
 import {
   ACCESS_PERMISSION_STATUSES,
   ACTIVITY_ACTORS,
+  ACTIVITY_CATEGORIES,
+  COMMERCIAL_INTENT_LEVELS,
   CONTACT_PERMISSION_STATUSES,
   HUMAN_APPROVAL_STATUSES,
-  INTENT_LEVELS,
   JOB_RUN_STATUSES,
   LEAD_LIFECYCLE_STATUSES,
+  LEAD_PIPELINE_STATUSES,
   MARKET_REGIONS,
   MESSAGE_DRAFT_STATUSES,
   OUTREACH_CHANNELS,
+  PURCHASE_INTENT_LEVELS,
+  QUALIFICATION_INTENT_LEVELS,
   SOURCE_TYPES,
+  SUGGESTED_NEXT_ACTIONS,
+  URGENCY_LEVELS,
+  type AiExtraction,
 } from "@tourest/shared";
 
 /**
@@ -60,6 +67,8 @@ export const sources = sqliteTable(
       .default("unknown"),
     isEnabled: integer("is_enabled", { mode: "boolean" }).notNull().default(true),
     retentionDays: integer("retention_days").notNull().default(90),
+    /** Adapter-specific configuration (allowlists, cron, rate limits, etc.). */
+    config: text("config", { mode: "json" }).$type<Record<string, unknown>>(),
     createdAt,
     updatedAt,
   },
@@ -125,9 +134,17 @@ export const leads = sqliteTable(
     lifecycleStatus: text("lifecycle_status", { enum: LEAD_LIFECYCLE_STATUSES })
       .notNull()
       .default("new"),
+    /** Operator-facing sales pipeline status (Step 5). */
+    status: text("status", { enum: LEAD_PIPELINE_STATUSES })
+      .notNull()
+      .default("discovered"),
     approvalStatus: text("approval_status", { enum: HUMAN_APPROVAL_STATUSES })
       .notNull()
       .default("pending"),
+    /** Manual qualification override (0-100). Null = use AI qualification. */
+    manualIntentScore: integer("manual_intent_score"),
+    overrideReason: text("override_reason"),
+    lastContactedAt: text("last_contacted_at"),
     contactPermissionStatus: text("contact_permission_status", {
       enum: CONTACT_PERMISSION_STATUSES,
     })
@@ -142,7 +159,28 @@ export const leads = sqliteTable(
   (t) => ({
     dedupeKeyUnique: uniqueIndex("leads_dedupe_key_unique").on(t.dedupeKey),
     lifecycleIdx: index("leads_lifecycle_idx").on(t.lifecycleStatus),
+    statusIdx: index("leads_status_idx").on(t.status),
     approvalIdx: index("leads_approval_idx").on(t.approvalStatus),
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// contact_suppressions (privacy: do-not-contact list)
+// ---------------------------------------------------------------------------
+export const contactSuppressions = sqliteTable(
+  "contact_suppressions",
+  {
+    id: idColumn,
+    value: text("value").notNull(),
+    normalizedValue: text("normalized_value").notNull(),
+    reason: text("reason"),
+    createdBy: text("created_by"),
+    createdAt,
+  },
+  (t) => ({
+    normalizedUnique: uniqueIndex("contact_suppressions_normalized_unique").on(
+      t.normalizedValue,
+    ),
   }),
 );
 
@@ -153,24 +191,63 @@ export const qualifications = sqliteTable(
   "qualifications",
   {
     id: idColumn,
-    leadId: text("lead_id")
+    /** Item-centric: one current qualification per source item (deduped). */
+    sourceItemId: text("source_item_id")
       .notNull()
-      .references(() => leads.id, { onDelete: "cascade" }),
-    intentLevel: text("intent_level", { enum: INTENT_LEVELS })
+      .references(() => sourceItems.id, { onDelete: "cascade" }),
+    /** Optional link to a promoted lead. */
+    leadId: text("lead_id").references(() => leads.id, { onDelete: "set null" }),
+
+    // Deterministic scoring output
+    intentScore: integer("intent_score").notNull().default(0),
+    intentLevel: text("intent_level", { enum: QUALIFICATION_INTENT_LEVELS })
+      .notNull()
+      .default("irrelevant"),
+    suggestedNextAction: text("suggested_next_action", {
+      enum: SUGGESTED_NEXT_ACTIONS,
+    })
+      .notNull()
+      .default("discard"),
+
+    // AI-extracted signals
+    purchaseIntent: text("purchase_intent", { enum: PURCHASE_INTENT_LEVELS })
       .notNull()
       .default("none"),
-    intentScore: real("intent_score").notNull().default(0),
+    urgency: text("urgency", { enum: URGENCY_LEVELS })
+      .notNull()
+      .default("none"),
+    confidence: real("confidence").notNull().default(0),
+    reasoning: text("reasoning"),
+
+    // Extracted facts
     destination: text("destination"),
-    travelWindow: text("travel_window"),
-    partySize: integer("party_size"),
-    budgetHint: text("budget_hint"),
-    rationale: text("rationale"),
-    model: text("model"),
+    city: text("city"),
+    travelDates: text("travel_dates"),
+    travelersCount: integer("travelers_count"),
+    activityCategory: text("activity_category"),
+    language: text("language"),
+    evidence: text("evidence", { mode: "json" }).$type<string[]>(),
+    missingInformation: text("missing_information", {
+      mode: "json",
+    }).$type<string[]>(),
+
+    // Analysis provenance
+    extraction: text("extraction", { mode: "json" }).$type<AiExtraction>(),
+    rawResponse: text("raw_response"),
+    model: text("model").notNull().default("unknown"),
+    modelProvider: text("model_provider").notNull().default("ollama"),
+    promptVersion: text("prompt_version").notNull().default("v0"),
+    analyzedAt: text("analyzed_at").notNull().default(nowSql),
+
     createdAt,
     updatedAt,
   },
   (t) => ({
+    sourceItemUnique: uniqueIndex("qualifications_source_item_unique").on(
+      t.sourceItemId,
+    ),
     leadIdx: index("qualifications_lead_idx").on(t.leadId),
+    intentLevelIdx: index("qualifications_intent_level_idx").on(t.intentLevel),
   }),
 );
 
@@ -188,10 +265,19 @@ export const tours = sqliteTable(
     country: text("country").notNull(),
     category: text("category"),
     durationHours: real("duration_hours"),
+    durationLabel: text("duration_label"),
+    /** Languages the tour is offered in. */
+    languages: text("languages", { mode: "json" }).$type<string[]>(),
     priceFrom: real("price_from"),
     currency: text("currency"),
     url: text("url"),
     description: text("description"),
+    /** Provider-supplied availability metadata (never fabricated). */
+    availability: text("availability", { mode: "json" }).$type<
+      Record<string, unknown>
+    >(),
+    /** Last synchronization timestamp from the catalog provider. */
+    lastSyncedAt: text("last_synced_at"),
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
     createdAt,
     updatedAt,
@@ -209,24 +295,24 @@ export const tourMatches = sqliteTable(
   "tour_matches",
   {
     id: idColumn,
-    leadId: text("lead_id")
-      .notNull()
-      .references(() => leads.id, { onDelete: "cascade" }),
+    /** Nullable: matches are computed for a qualified request (source item). */
+    leadId: text("lead_id").references(() => leads.id, { onDelete: "cascade" }),
+    sourceItemId: text("source_item_id").references(() => sourceItems.id, {
+      onDelete: "cascade",
+    }),
     tourId: text("tour_id")
       .notNull()
       .references(() => tours.id, { onDelete: "cascade" }),
     score: real("score").notNull().default(0),
     rank: integer("rank").notNull().default(0),
+    matchedOn: text("matched_on", { mode: "json" }).$type<string[]>(),
     rationale: text("rationale"),
     createdAt,
     updatedAt,
   },
   (t) => ({
-    leadTourUnique: uniqueIndex("tour_matches_lead_tour_unique").on(
-      t.leadId,
-      t.tourId,
-    ),
     leadIdx: index("tour_matches_lead_idx").on(t.leadId),
+    sourceItemIdx: index("tour_matches_source_item_idx").on(t.sourceItemId),
   }),
 );
 
@@ -237,9 +323,11 @@ export const messageDrafts = sqliteTable(
   "message_drafts",
   {
     id: idColumn,
-    leadId: text("lead_id")
-      .notNull()
-      .references(() => leads.id, { onDelete: "cascade" }),
+    /** Nullable: drafts respond to a qualified request (source item). */
+    leadId: text("lead_id").references(() => leads.id, { onDelete: "cascade" }),
+    sourceItemId: text("source_item_id").references(() => sourceItems.id, {
+      onDelete: "cascade",
+    }),
     tourMatchId: text("tour_match_id").references(() => tourMatches.id, {
       onDelete: "set null",
     }),
@@ -251,17 +339,19 @@ export const messageDrafts = sqliteTable(
     body: text("body").notNull(),
     status: text("status", { enum: MESSAGE_DRAFT_STATUSES })
       .notNull()
-      .default("draft"),
+      .default("pending_approval"),
     approvalStatus: text("approval_status", { enum: HUMAN_APPROVAL_STATUSES })
       .notNull()
       .default("pending"),
     approvedBy: text("approved_by"),
     approvedAt: text("approved_at"),
+    rejectionReason: text("rejection_reason"),
     createdAt,
     updatedAt,
   },
   (t) => ({
     leadIdx: index("message_drafts_lead_idx").on(t.leadId),
+    sourceItemIdx: index("message_drafts_source_item_idx").on(t.sourceItemId),
     statusIdx: index("message_drafts_status_idx").on(t.status),
   }),
 );
@@ -310,6 +400,49 @@ export const jobRuns = sqliteTable(
   }),
 );
 
+// ---------------------------------------------------------------------------
+// seo_opportunities
+//   Aggregate search-demand signals (e.g. Yandex Wordstat). NOT leads.
+// ---------------------------------------------------------------------------
+export const seoOpportunities = sqliteTable(
+  "seo_opportunities",
+  {
+    id: idColumn,
+    sourceId: text("source_id")
+      .notNull()
+      .references(() => sources.id, { onDelete: "cascade" }),
+    keyword: text("keyword").notNull(),
+    normalizedKeyword: text("normalized_keyword").notNull(),
+    language: text("language"),
+    demand: integer("demand"),
+    region: text("region", { enum: MARKET_REGIONS }).notNull().default("other"),
+    destination: text("destination"),
+    activityCategory: text("activity_category", { enum: ACTIVITY_CATEGORIES })
+      .notNull()
+      .default("other"),
+    commercialIntentScore: integer("commercial_intent_score")
+      .notNull()
+      .default(0),
+    commercialIntentLevel: text("commercial_intent_level", {
+      enum: COMMERCIAL_INTENT_LEVELS,
+    })
+      .notNull()
+      .default("informational"),
+    period: text("period"),
+    notes: text("notes"),
+    dedupeKey: text("dedupe_key").notNull(),
+    createdAt,
+    updatedAt,
+  },
+  (t) => ({
+    dedupeKeyUnique: uniqueIndex("seo_opportunities_dedupe_key_unique").on(
+      t.dedupeKey,
+    ),
+    sourceIdx: index("seo_opportunities_source_idx").on(t.sourceId),
+    intentIdx: index("seo_opportunities_intent_idx").on(t.commercialIntentScore),
+  }),
+);
+
 /** All tables, handy for migration tooling and tests. */
 export const schema = {
   sources,
@@ -321,6 +454,8 @@ export const schema = {
   messageDrafts,
   activityLogs,
   jobRuns,
+  seoOpportunities,
+  contactSuppressions,
 };
 
 // Row types inferred from the schema (DB-shaped, distinct from API DTOs).
@@ -342,3 +477,7 @@ export type ActivityLogRow = typeof activityLogs.$inferSelect;
 export type NewActivityLogRow = typeof activityLogs.$inferInsert;
 export type JobRunRow = typeof jobRuns.$inferSelect;
 export type NewJobRunRow = typeof jobRuns.$inferInsert;
+export type SeoOpportunityRow = typeof seoOpportunities.$inferSelect;
+export type NewSeoOpportunityRow = typeof seoOpportunities.$inferInsert;
+export type ContactSuppressionRow = typeof contactSuppressions.$inferSelect;
+export type NewContactSuppressionRow = typeof contactSuppressions.$inferInsert;

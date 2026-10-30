@@ -1,185 +1,175 @@
 # Tourest AI Lead Hunter
 
-A **local-first, privacy-conscious** application to discover potential B2C
-customers for [Tourest](https://tourest.online), identify travel/excursion
-booking intent, match relevant Tourest tours, and prepare **personalized
-responses for human approval**.
+A **local-first, privacy-conscious** B2C sales dashboard for
+[Tourest](https://tourest.online). It discovers travel/excursion requests,
+qualifies booking intent with a **local** Ollama model, matches verified
+Tourest tours, and prepares **personalized drafts for human approval**.
 
-It is designed to cost **$0 in mandatory recurring software/API fees**:
-everything runs on your machine (SQLite + a local [Ollama](https://ollama.com)
-model), with **no paid APIs or cloud services**.
+Mandatory recurring cost: **$0**. Everything runs on your machine (SQLite +
+optional [Ollama](https://ollama.com)). No paid APIs or cloud services.
 
-> **Status: Step 1 — scaffold only.**
-> Scraping, messaging integrations, and AI processing are **intentionally not
-> implemented yet**. The external-service modules are wired through interfaces
-> and fail loudly (`501 Not Implemented`) if invoked.
+---
+
+## What the MVP does
+
+| Area | Behaviour |
+| ---- | --------- |
+| Sources | Telegram Bot API (authorized groups), Facebook **manual** import, Yandex Wordstat **CSV** |
+| Qualification | Local Ollama extraction + deterministic intent scoring |
+| Matching | Up to 3 verified tours; never invents prices, availability, or URLs |
+| Drafts | RU/EN templates from verified fields; **pending until a human approves** |
+| Dashboard | Overview, sources, requests, leads, recommendations, drafts, SEO, activity, settings |
+| Jobs | Ingestion, dedup, qualification, matching, draft generation, follow-up reminders |
+| Privacy | Local admin auth, audit log, contact suppression, data deletion |
+
+Approval **does not** post to Telegram, Facebook, email, or any other platform.
+There is **no unsolicited bulk messaging**.
 
 ---
 
 ## Tech stack
 
-| Area        | Choice                                                            |
-| ----------- | ----------------------------------------------------------------- |
-| Monorepo    | npm workspaces                                                    |
-| Language    | TypeScript (strict)                                               |
-| Frontend    | React 18, Vite 5, Tailwind CSS v3, shadcn/ui-style components, TanStack Query, React Hook Form, Zod |
-| Backend     | Express 4, Zod                                                    |
-| Database    | SQLite via Drizzle ORM (`better-sqlite3`)                         |
-| AI          | Local Ollama HTTP API (interface only in this step)              |
-| Background  | node-cron                                                         |
-| Testing     | Vitest                                                            |
+| Area | Choice |
+| ---- | ------ |
+| Monorepo | npm workspaces |
+| Language | TypeScript (strict, `noUncheckedIndexedAccess`) |
+| Frontend | React 18, Vite 5, Tailwind CSS v3, shadcn-style UI, TanStack Query, RHF, Zod |
+| Backend | Express 4, Zod |
+| Database | SQLite via Drizzle ORM (`better-sqlite3` 11) |
+| AI | Local Ollama HTTP API |
+| Jobs | node-cron with pause/resume, retries, concurrency limits |
+| Tests | Vitest |
 
-All dependencies are pinned to versions compatible with **Node.js 18.20.8**
-(e.g. Vite 5, Vitest 2, `better-sqlite3` 11 — later majors require Node 20+).
-
----
-
-## Repository layout
-
-```
-.
-├── package.json              # npm workspaces root + scripts
-├── tsconfig.base.json        # shared strict TS config
-├── apps/
-│   ├── api/                  # Express backend (health endpoint, DI, modules)
-│   │   ├── src/
-│   │   │   ├── config/       # env validation (Zod)
-│   │   │   ├── core/         # errors, logger, DI container
-│   │   │   ├── db/           # Drizzle schema, client, migrate runner
-│   │   │   ├── http/         # routes + middleware (health endpoint)
-│   │   │   └── modules/      # sources, ingestion, qualification,
-│   │   │                     #   tour-matching, outreach, crm, jobs, ai
-│   │   └── drizzle/          # generated SQL migrations
-│   └── web/                  # React + Vite frontend shell
-│       └── src/
-│           ├── components/ui # shadcn/ui-style primitives
-│           ├── features/     # health, leads (RHF + Zod)
-│           └── pages/        # Dashboard + placeholders
-└── packages/
-    └── shared/               # domain entities, enums, Zod schemas,
-                              #   pure domain logic (+ unit tests)
-```
-
-### Core entities
-
-`Source`, `SourceItem`, `Lead`, `Qualification`, `Tour`, `TourMatch`,
-`MessageDraft`, `ActivityLog`, `JobRun`.
-
-A **`SourceItem`** represents public content *or* an authorized incoming
-message. **It is not automatically a contactable `Lead`** — a `Lead` is only
-created when a source item is explicitly promoted. Every record carries
-provenance (source URL), collection timestamp, access/permission status, data
-retention metadata, deduplication identifiers, lead lifecycle status, and
-human approval status.
+Pinned for **Node.js 18.20.8** (see `.nvmrc`). `better-sqlite3` v12 needs Node 20+.
 
 ---
 
-## Prerequisites
-
-- **Node.js 18.20.8** (see [`.nvmrc`](./.nvmrc)). With `nvm`:
-  ```bash
-  nvm install 18.20.8
-  nvm use
-  ```
-- **npm 10+** (ships with Node 18.20.8).
-- A C/C++ toolchain is only needed if `better-sqlite3` has no prebuilt binary
-  for your platform (most macOS/Linux/Windows setups use a prebuilt binary).
-- **Ollama is optional** and only needed in a later step. Nothing in Step 1
-  requires it.
-
----
-
-## Local startup (exact steps)
-
-From the repository root:
+## Local startup
 
 ```bash
-# 1. Install all workspace dependencies
+# 1. Use Node 18.20.8
+nvm install 18.20.8 && nvm use
+
+# 2. Install workspace dependencies
 npm install
 
-# 2. Create local environment files (no secrets inside)
+# 3. Environment files (no secrets committed)
 cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env
 
-# 3. Generate the SQLite schema migration and create the database
-npm run db:generate      # writes SQL to apps/api/drizzle
-npm run db:migrate       # applies migrations -> apps/api/data/tourest.db
+# Optional: protect the dashboard
+#   ADMIN_USERNAME=admin
+#   ADMIN_PASSWORD=choose-a-strong-password
 
-# 4. Start API (http://localhost:4000) and Web (http://localhost:5173) together
+# Optional: local AI for qualification
+#   ollama pull qwen3:4b
+#   (leave OLLAMA_* defaults)
+
+# 4. Database
+npm run db:generate
+npm run db:migrate
+
+# 5. Run API (http://localhost:4000) + web (http://localhost:5173)
 npm run dev
 ```
 
-Then open:
+Open <http://localhost:5173>. The header health badge polls `/api/health`.
 
-- Web app: <http://localhost:5173>
-- API health check: <http://localhost:4000/api/health>
-
-The web app's header shows a live **API/db health badge** (it polls the health
-endpoint through the Vite dev proxy).
-
-### Running apps individually
-
-```bash
-npm run dev -w @tourest/api    # backend only
-npm run dev -w @tourest/web    # frontend only
-```
+If `ADMIN_PASSWORD` is empty, authentication is **disabled** (local dev only)
+and a warning is logged. Set a password before exposing the UI on a network.
 
 ---
 
-## Useful scripts (run from root)
+## Useful scripts
 
-| Command                | What it does                                              |
-| ---------------------- | -------------------------------------------------------- |
-| `npm run dev`          | Run API + Web concurrently                               |
-| `npm run build`        | Type-check all workspaces and build the web bundle       |
-| `npm run typecheck`    | `tsc --noEmit` across all workspaces                     |
-| `npm test`             | Run all Vitest unit/integration tests                    |
-| `npm run db:generate`  | Generate Drizzle SQL migrations from the schema          |
-| `npm run db:migrate`   | Apply migrations to the local SQLite database            |
-
----
-
-## Environment variables
-
-No secrets are required. See the committed examples:
-
-- [`apps/api/.env.example`](./apps/api/.env.example) — `PORT`, `WEB_ORIGIN`,
-  `DATABASE_PATH`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `LOG_LEVEL`.
-- [`apps/web/.env.example`](./apps/web/.env.example) — `VITE_API_BASE_URL`,
-  `VITE_API_PROXY_TARGET`.
-
-The SQLite database file and all `.env` files are git-ignored.
+| Command | What it does |
+| ------- | ------------ |
+| `npm run dev` | API + web together |
+| `npm run build` | Typecheck all workspaces and build the web bundle |
+| `npm run typecheck` | `tsc --noEmit` across workspaces |
+| `npm test` | Vitest (shared + API + web) |
+| `npm run db:generate` | Generate Drizzle SQL from the schema |
+| `npm run db:migrate` | Apply migrations to local SQLite |
 
 ---
 
-## Testing
+## Dashboard
 
-```bash
-npm test
-```
+Nine operator views:
 
-Initial tests cover the pure domain logic in `packages/shared`
-(deduplication keys, lead lifecycle/approval state machine, retention
-expiry) and an API integration test that boots the Express app against an
-in-memory SQLite database and asserts the health endpoint contract.
+1. **Overview** — confirmed counts (items, qualified/hot leads, approved drafts, contacted, replies, bookings) and source conversion rates. Bookings = leads a human marked `converted`. Nothing is estimated.
+2. **Sources** — create/enable/disable collectors; manual Facebook/Yandex import.
+3. **Discovered Requests** — source items; qualify; promote to a lead; delete.
+4. **Qualified Leads** — search, source/destination/status filters, intent-score sort, notes, evidence/source links, manual score override, pipeline status, delete.
+5. **AI Recommendations** — verified tour matches with rationales.
+6. **Message Drafts** — edit, reject, approve, copy approved text (no auto-send).
+7. **SEO Opportunities** — Wordstat demand (not leads).
+8. **Activity History** — audit log.
+9. **Settings** — job run/pause/resume/history, catalog CSV import, contact suppression, retention purge. Secrets are never displayed.
 
----
-
-## Privacy & compliance notes
-
-- **Human-in-the-loop by design:** leads and message drafts carry an explicit
-  approval status; nothing is "contacted" before a human approves it.
-- **Contact-permission first:** leads default to `not_contactable`.
-- **Retention metadata** is attached to collected items so they can be purged
-  or reviewed on schedule.
-- **Provenance** (source URL + collection timestamp + access/permission
-  status) is recorded for every source item.
+Lead pipeline statuses: `discovered`, `qualified`, `draft_ready`, `approved`,
+`contacted`, `replied`, `converted`, `rejected`. You cannot mark a lead
+`contacted` until it is `approved`. Suppressed contacts cannot be contacted.
 
 ---
 
-## Next steps (not in this step)
+## Background jobs
 
-Implement, module by module behind the existing interfaces: source collectors,
-the ingestion pipeline, AI qualification via local Ollama, tour matching,
-message drafting, and outreach channels — plus the scheduled jobs that drive
-them.
+| Job | Default schedule | What it does |
+| --- | ---------------- | ------------ |
+| `source-ingestion` | every 2 min | Poll enabled Telegram sources |
+| `deduplication` | every 15 min | Report duplicate lead keys (unique index already enforces writes) |
+| `ai-qualification` | every 5 min | Qualify pending source items |
+| `tour-matching` | every 5 min | Match tours to unqualified-for-matching requests |
+| `draft-generation` | every 10 min | Create **pending** sales drafts |
+| `follow-up-reminders` | hourly | Audit-log reminders for stalled approved/contacted leads |
+
+Each job supports **Run now**, **pause/resume**, retries with backoff,
+concurrency limits, and persisted history. Disable jobs at boot with
+`JOBS_DISABLED=ai-qualification,draft-generation`.
+
+---
+
+## Environment (secrets stay in `.env`)
+
+See [`apps/api/.env.example`](./apps/api/.env.example):
+
+- `ADMIN_USERNAME` / `ADMIN_PASSWORD` — local dashboard auth
+- `TELEGRAM_BOT_TOKEN` / `TELEGRAM_WEBHOOK_SECRET` — never logged
+- `TOUR_CATALOG_API_URL` / `TOUR_CATALOG_API_TOKEN` — only if you have an **authorized** catalog endpoint; otherwise import CSV/JSON
+- `OLLAMA_*` — local model
+- `JOBS_DISABLED` — comma-separated job names
+
+The SQLite file (`apps/api/data/`) and all `.env` files are git-ignored.
+
+---
+
+## Privacy & compliance
+
+- Human approval is required before any outreach text is considered sendable.
+- Copying an approved draft is a **manual** operator action.
+- Leads default to `not_contactable` / `needs_review`.
+- Contact suppression is a do-not-contact list.
+- Source items carry retention expiry; Settings can purge expired rows.
+- Activity log records promotions, overrides, drafts, deletions, and reminders.
+- Telegram adapter only stores messages the Bot API delivers for allowlisted chats. No private-chat scraping, no unsolicited DMs.
+- Facebook adapter is paste/CSV of public discussion content only.
+
+---
+
+## Remaining limitations (not in this MVP)
+
+- No Meta Graph API, no unauthorized Facebook scraping, no browser automation.
+- No free Yandex Wordstat API — CSV import only.
+- No Tourest catalog API unless **you** configure an authorized URL.
+- No automatic sending on Telegram, WhatsApp, or email (channel senders stay unimplemented).
+- Sessions are in-memory (restarting the API signs everyone out).
+- Auth is a single local admin, not multi-user SSO.
+- Follow-up reminders write audit events; they do not invent replies or bookings.
+- Attribution/booking metrics are **only** human-confirmed `converted` leads.
+
+---
+
+## License
+
+UNLICENSED — internal Tourest tooling.

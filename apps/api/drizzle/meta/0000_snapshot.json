@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "d99f0428-0b5a-4f78-a0a0-d483ad83da2c",
+  "id": "3f794b16-98b0-47f4-a9fa-59cfc84ba470",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "activity_logs": {
@@ -74,6 +74,67 @@
             "created_at"
           ],
           "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "contact_suppressions": {
+      "name": "contact_suppressions",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "value": {
+          "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "normalized_value": {
+          "name": "normalized_value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ','now'))"
+        }
+      },
+      "indexes": {
+        "contact_suppressions_normalized_unique": {
+          "name": "contact_suppressions_normalized_unique",
+          "columns": [
+            "normalized_value"
+          ],
+          "isUnique": true
         }
       },
       "foreignKeys": {},
@@ -232,6 +293,14 @@
           "autoincrement": false,
           "default": "'new'"
         },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'discovered'"
+        },
         "approval_status": {
           "name": "approval_status",
           "type": "text",
@@ -239,6 +308,27 @@
           "notNull": true,
           "autoincrement": false,
           "default": "'pending'"
+        },
+        "manual_intent_score": {
+          "name": "manual_intent_score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "override_reason": {
+          "name": "override_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_contacted_at": {
+          "name": "last_contacted_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         },
         "contact_permission_status": {
           "name": "contact_permission_status",
@@ -301,6 +391,13 @@
           ],
           "isUnique": false
         },
+        "leads_status_idx": {
+          "name": "leads_status_idx",
+          "columns": [
+            "status"
+          ],
+          "isUnique": false
+        },
         "leads_approval_idx": {
           "name": "leads_approval_idx",
           "columns": [
@@ -342,7 +439,14 @@
           "name": "lead_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "source_item_id": {
+          "name": "source_item_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "tour_match_id": {
@@ -388,7 +492,7 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "'draft'"
+          "default": "'pending_approval'"
         },
         "approval_status": {
           "name": "approval_status",
@@ -407,6 +511,13 @@
         },
         "approved_at": {
           "name": "approved_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "rejection_reason": {
+          "name": "rejection_reason",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -437,6 +548,13 @@
           ],
           "isUnique": false
         },
+        "message_drafts_source_item_idx": {
+          "name": "message_drafts_source_item_idx",
+          "columns": [
+            "source_item_id"
+          ],
+          "isUnique": false
+        },
         "message_drafts_status_idx": {
           "name": "message_drafts_status_idx",
           "columns": [
@@ -452,6 +570,19 @@
           "tableTo": "leads",
           "columnsFrom": [
             "lead_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "message_drafts_source_item_id_source_items_id_fk": {
+          "name": "message_drafts_source_item_id_source_items_id_fk",
+          "tableFrom": "message_drafts",
+          "tableTo": "source_items",
+          "columnsFrom": [
+            "source_item_id"
           ],
           "columnsTo": [
             "id"
@@ -487,12 +618,27 @@
           "notNull": true,
           "autoincrement": false
         },
-        "lead_id": {
-          "name": "lead_id",
+        "source_item_id": {
+          "name": "source_item_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
+        },
+        "lead_id": {
+          "name": "lead_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "intent_score": {
+          "name": "intent_score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
         },
         "intent_level": {
           "name": "intent_level",
@@ -500,15 +646,46 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
+          "default": "'irrelevant'"
+        },
+        "suggested_next_action": {
+          "name": "suggested_next_action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'discard'"
+        },
+        "purchase_intent": {
+          "name": "purchase_intent",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
           "default": "'none'"
         },
-        "intent_score": {
-          "name": "intent_score",
+        "urgency": {
+          "name": "urgency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'none'"
+        },
+        "confidence": {
+          "name": "confidence",
           "type": "real",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
           "default": 0
+        },
+        "reasoning": {
+          "name": "reasoning",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         },
         "destination": {
           "name": "destination",
@@ -517,29 +694,64 @@
           "notNull": false,
           "autoincrement": false
         },
-        "travel_window": {
-          "name": "travel_window",
+        "city": {
+          "name": "city",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "party_size": {
-          "name": "party_size",
+        "travel_dates": {
+          "name": "travel_dates",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "travelers_count": {
+          "name": "travelers_count",
           "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "budget_hint": {
-          "name": "budget_hint",
+        "activity_category": {
+          "name": "activity_category",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "rationale": {
-          "name": "rationale",
+        "language": {
+          "name": "language",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "evidence": {
+          "name": "evidence",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "missing_information": {
+          "name": "missing_information",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "extraction": {
+          "name": "extraction",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "raw_response": {
+          "name": "raw_response",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -549,7 +761,209 @@
           "name": "model",
           "type": "text",
           "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'unknown'"
+        },
+        "model_provider": {
+          "name": "model_provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'ollama'"
+        },
+        "prompt_version": {
+          "name": "prompt_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'v0'"
+        },
+        "analyzed_at": {
+          "name": "analyzed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ','now'))"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ','now'))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ','now'))"
+        }
+      },
+      "indexes": {
+        "qualifications_source_item_unique": {
+          "name": "qualifications_source_item_unique",
+          "columns": [
+            "source_item_id"
+          ],
+          "isUnique": true
+        },
+        "qualifications_lead_idx": {
+          "name": "qualifications_lead_idx",
+          "columns": [
+            "lead_id"
+          ],
+          "isUnique": false
+        },
+        "qualifications_intent_level_idx": {
+          "name": "qualifications_intent_level_idx",
+          "columns": [
+            "intent_level"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "qualifications_source_item_id_source_items_id_fk": {
+          "name": "qualifications_source_item_id_source_items_id_fk",
+          "tableFrom": "qualifications",
+          "tableTo": "source_items",
+          "columnsFrom": [
+            "source_item_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "qualifications_lead_id_leads_id_fk": {
+          "name": "qualifications_lead_id_leads_id_fk",
+          "tableFrom": "qualifications",
+          "tableTo": "leads",
+          "columnsFrom": [
+            "lead_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "seo_opportunities": {
+      "name": "seo_opportunities",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source_id": {
+          "name": "source_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "keyword": {
+          "name": "keyword",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "normalized_keyword": {
+          "name": "normalized_keyword",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "language": {
+          "name": "language",
+          "type": "text",
+          "primaryKey": false,
           "notNull": false,
+          "autoincrement": false
+        },
+        "demand": {
+          "name": "demand",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "region": {
+          "name": "region",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'other'"
+        },
+        "destination": {
+          "name": "destination",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "activity_category": {
+          "name": "activity_category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'other'"
+        },
+        "commercial_intent_score": {
+          "name": "commercial_intent_score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "commercial_intent_level": {
+          "name": "commercial_intent_level",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'informational'"
+        },
+        "period": {
+          "name": "period",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "dedupe_key": {
+          "name": "dedupe_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
           "autoincrement": false
         },
         "created_at": {
@@ -570,21 +984,35 @@
         }
       },
       "indexes": {
-        "qualifications_lead_idx": {
-          "name": "qualifications_lead_idx",
+        "seo_opportunities_dedupe_key_unique": {
+          "name": "seo_opportunities_dedupe_key_unique",
           "columns": [
-            "lead_id"
+            "dedupe_key"
+          ],
+          "isUnique": true
+        },
+        "seo_opportunities_source_idx": {
+          "name": "seo_opportunities_source_idx",
+          "columns": [
+            "source_id"
+          ],
+          "isUnique": false
+        },
+        "seo_opportunities_intent_idx": {
+          "name": "seo_opportunities_intent_idx",
+          "columns": [
+            "commercial_intent_score"
           ],
           "isUnique": false
         }
       },
       "foreignKeys": {
-        "qualifications_lead_id_leads_id_fk": {
-          "name": "qualifications_lead_id_leads_id_fk",
-          "tableFrom": "qualifications",
-          "tableTo": "leads",
+        "seo_opportunities_source_id_sources_id_fk": {
+          "name": "seo_opportunities_source_id_sources_id_fk",
+          "tableFrom": "seo_opportunities",
+          "tableTo": "sources",
           "columnsFrom": [
-            "lead_id"
+            "source_id"
           ],
           "columnsTo": [
             "id"
@@ -815,6 +1243,13 @@
           "autoincrement": false,
           "default": 90
         },
+        "config": {
+          "name": "config",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "text",
@@ -860,7 +1295,14 @@
           "name": "lead_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "source_item_id": {
+          "name": "source_item_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "tour_id": {
@@ -885,6 +1327,13 @@
           "notNull": true,
           "autoincrement": false,
           "default": 0
+        },
+        "matched_on": {
+          "name": "matched_on",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         },
         "rationale": {
           "name": "rationale",
@@ -911,18 +1360,17 @@
         }
       },
       "indexes": {
-        "tour_matches_lead_tour_unique": {
-          "name": "tour_matches_lead_tour_unique",
-          "columns": [
-            "lead_id",
-            "tour_id"
-          ],
-          "isUnique": true
-        },
         "tour_matches_lead_idx": {
           "name": "tour_matches_lead_idx",
           "columns": [
             "lead_id"
+          ],
+          "isUnique": false
+        },
+        "tour_matches_source_item_idx": {
+          "name": "tour_matches_source_item_idx",
+          "columns": [
+            "source_item_id"
           ],
           "isUnique": false
         }
@@ -934,6 +1382,19 @@
           "tableTo": "leads",
           "columnsFrom": [
             "lead_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tour_matches_source_item_id_source_items_id_fk": {
+          "name": "tour_matches_source_item_id_source_items_id_fk",
+          "tableFrom": "tour_matches",
+          "tableTo": "source_items",
+          "columnsFrom": [
+            "source_item_id"
           ],
           "columnsTo": [
             "id"
@@ -1018,6 +1479,20 @@
           "notNull": false,
           "autoincrement": false
         },
+        "duration_label": {
+          "name": "duration_label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "languages": {
+          "name": "languages",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "price_from": {
           "name": "price_from",
           "type": "real",
@@ -1041,6 +1516,20 @@
         },
         "description": {
           "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "availability": {
+          "name": "availability",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_synced_at": {
+          "name": "last_synced_at",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
